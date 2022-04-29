@@ -24,13 +24,6 @@ class OssDriver implements DiskFactoryInterface
     {
 
         $this->config = $config;
-//        var_dump($this->config->toArray());
-//        $this->config->setAccessKeyId('LTAI5tBhQCF55AbB56vNVunR');
-//        $this->config->setAccessKeySecret('WQEWCHGGlx7ngJ1NcbcksAoaqmBGIc');
-//        $this->config->setNode('oss-cn-shenzhen');
-//        $this->config->setBucket('i-ts');
-//        $this->config->setBasePath('test-cloud');
-//        $this->config->setMaxSize(1024);
     }
 
     /**
