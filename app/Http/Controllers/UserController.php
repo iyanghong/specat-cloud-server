@@ -741,10 +741,12 @@ class UserController extends Controller
                 return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '请勿频繁操作,' . (60 - $time) . 's', [
                     'time' => $data['time'],
                     'now' => $nowTime,
-                    'diff' => $time
+                    'diff' => $time,
+                    'data' => $data
                 ]);
             }
         }
+        sleep(0.5);
         $message = messageMail()->sendRegisterVerifyCode($email);
 
         if ($message['flag']) {
