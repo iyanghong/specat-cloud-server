@@ -44,7 +44,7 @@ class MessageEmail implements MessageInterface
             'code' => $code,
             'time' => time()
         ];
-        Cache::set('Mail_RegisterVerifyCode:' . $address, json_encode($cacheData));
+        Cache::put('Mail_RegisterVerifyCode:' . $address, json_encode($cacheData));
 
         $Mailable->to($address)->subject($title);
         Mail::to($address)->send($Mailable);
@@ -108,7 +108,7 @@ class MessageEmail implements MessageInterface
             'code' => $code,
             'time' => time()
         ];
-        Cache::set('VerifyCode_Mail:' . $address, json_encode($cacheData));
+        Cache::put('VerifyCode_Mail:' . $address, json_encode($cacheData));
         $Mailable->to($address)->subject($title);
         Mail::to($address)->send($Mailable);
         $res['flag'] = true;
