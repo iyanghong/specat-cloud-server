@@ -898,6 +898,10 @@ class UserController extends Controller
         if ($registerMod == 'Develop' && !in_array(4, $role)) {
             $role[] = 4;
         }
+        //快猫云注册用户
+        if ($registerMod == 'specat-cloud' && !in_array(4, $role)) {
+            $role[] = 9;
+        }
 
         /* @var $userRoleModel Builder */
         $userRoleModel = new UserRole();
