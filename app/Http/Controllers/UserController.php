@@ -567,7 +567,7 @@ class UserController extends Controller
             'user_uuid' => $uuid,
             'content' => $content,
             'ip' => request()->ip(),
-            'created_at' => time(),
+            'created_at' =>date('Y-m-d H:i:s'),
             'user_status' => $userStatus,
             'status_time' => $statusTime
         ]);
@@ -917,7 +917,7 @@ class UserController extends Controller
                 'uuid' => getUuid(),
                 'user_uuid' => $user->user_uuid,
                 'role_uuid' => $roleEntity->role_uuid,
-                'auth_time' => time()
+                'auth_time' => date('Y-m-d H:i:s')
             ]);
             if (!$flag) {
                 DB::rollBack();
