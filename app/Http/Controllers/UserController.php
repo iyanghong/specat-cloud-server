@@ -738,12 +738,7 @@ class UserController extends Controller
             $nowTime = time();
             $time = ($nowTime - $data['time']);
             if ($time < 60) {
-                return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '请勿频繁操作,' . (60 - $time) . 's', [
-                    'time' => $data['time'],
-                    'now' => $nowTime,
-                    'diff' => $time,
-                    'data' => $data
-                ]);
+                return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '请勿频繁操作,' . (60 - $time) . 's');
             }
         }
 
