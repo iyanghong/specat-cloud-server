@@ -733,7 +733,7 @@ class UserController extends Controller
 
         $data = Cache::get("Mail_RegisterVerifyCode:$email");
         $data = json_decode($data, true);
-
+        sleep(0.5);
         if ($data !== null) {
             $nowTime = time();
             $time = ($nowTime - $data['time']);
@@ -746,7 +746,7 @@ class UserController extends Controller
                 ]);
             }
         }
-        sleep(0.5);
+
         $message = messageMail()->sendRegisterVerifyCode($email);
 
         if ($message['flag']) {
