@@ -87,6 +87,22 @@ class DiskConfig
     }
 
     /**
+     * @throws InvalidArgumentException
+     */
+    public function setSystemDisk()
+    {
+        $this->vendor = 'aliyun-oss';
+        $this->accessKeyId = systemConfig()->get('Sys.AccessKeyId');
+        $this->accessKeySecret = systemConfig()->get('Sys.AccessKeySecret');
+        $this->node = 'shenzhen';
+        $this->basePath = '';
+        $this->default = 1;
+        $this->bucket = systemConfig()->get('Sys.AliyunOssBucket');
+        $this->accessPath = '';
+        $this->maxSize = systemConfig()->get('Cloud.defaultDiskMaxSize');
+    }
+
+    /**
      * @return string
      */
     public function getAccessPath(): string

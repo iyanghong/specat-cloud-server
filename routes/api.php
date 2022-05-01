@@ -124,6 +124,10 @@ Route::group(['prefix' => 'member'], function () {
     /** 角色菜单 资源接口集合 : member/roleMenu */
     Route::resource('roleMenu', '\App\Http\Controllers\Member\RoleMenuController')->names('member.RoleMenu');
 
+    /** 个性化主题 资源接口集合 : member/personalTheme */
+//	Route::resource('personalTheme','\App\Http\Controllers\Member\PersonalThemeController')->names('member.PersonalTheme');
+    Route::get('personal/theme', '\App\Http\Controllers\Member\PersonalThemeController@getOnlineSetting');
+    Route::patch('personal/theme', '\App\Http\Controllers\Member\PersonalThemeController@updateSetting');
 });
 
 
@@ -170,5 +174,12 @@ Route::group(['prefix' => 'cloud'], function () {
     /** 资源 资源接口集合 : cloud/resource */
     Route::resource('resource', '\App\Http\Controllers\Cloud\ResourceController')->names('cloud.Resource');
 
+
+});
+
+
+Route::group(['prefix' => 'tool'], function () {
+
+    Route::post('upload/image/cache', '\App\Http\Controllers\ToolController@uploadCacheImage');
 
 });

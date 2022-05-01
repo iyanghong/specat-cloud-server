@@ -219,6 +219,16 @@ create table if not exists resources_share(
     update_user char(32) null comment '修改人'
 )ENGINE=INNODB comment='资源分享表';
 
+create table if not exists personal_theme(
+    id int primary key auto_increment comment '编号',
+    uuid char(32) unique not null comment '唯一标识',
+    background_image varchar(200) null comment '背景图片',
+    user_uuid char(32) not null comment '所属用户',
+    created_at datetime not null comment '添加时间',
+    updated_at datetime null comment '修改时间',
+    create_user char(32) not null comment '创建人',
+    update_user char(32) null comment '修改人'
+)ENGINE=INNODB comment='个性化主题表';
 
 -- 省表
 create table if not exists map_province(

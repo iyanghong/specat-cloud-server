@@ -31,7 +31,7 @@ class DiskFactory
         return new DiskFactory::$factoryList[$diskConfig->getVendor()]($diskConfig);
     }
 
-    public static function resloveFileType($fileExtension): string
+    public static function resolveFileType($fileExtension): string
     {
         $data = [
             'image' => array('webp', 'jpg', 'png', 'ico', 'bmp', 'gif', 'tif', 'pcx', 'tga', 'bmp', 'pxc', 'tiff', 'jpeg', 'exif', 'fpx', 'svg', 'psd', 'cdr', 'pcd', 'dxf', 'ufo', 'eps', 'ai', 'hdri'),

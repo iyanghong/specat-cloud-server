@@ -8,6 +8,7 @@ use App\Core\Generate\Resource\Model;
 use App\Http\Controllers\Controller;
 
 use App\Models\Cloud\Disk;
+use App\Models\Member\PersonalTheme;
 use App\Service\Disk\Config\DiskConfig;
 use App\Service\Disk\DiskFactory;
 use App\Service\Disk\Factory\DiskFactoryInterface;
@@ -157,9 +158,26 @@ class ResourceController extends Controller
         $accessPath = rtrim($accessPath, '/') . '/' . trim($disk->base_path, '/');
         $list = $this->getResourceListUitl($desktop->uuid, $accessPath);
         $desktop->list = $list;
+        $desktop->personal_setting = $this->getPersonalTheme();
         return api_response_show($desktop);
     }
 
+    private function getPersonalTheme()
+    {
+        $model = new PersonalTheme();
+        $setting = $model->where([
+            'user_uuid' => onlineMember()->getUuid()
+        ])->first();
+        if (!$setting) {
+            $setting = $model->create([
+                'uuid' => getUuid(),
+                'user_uuid' => onlineMember()->getUuid(),
+                'create_user' => onlineMember()->getUuid()
+            ]);
+            $setting->refresh();
+        }
+        return $setting;
+    }
 
     /**
      * 上传文件
@@ -236,7 +254,7 @@ class ResourceController extends Controller
                 'size' => $file->getSize(),
                 'type' => 'file',
                 'parent_all' => empty($resource) ? '' : ($resource->parent_all . $resource->uuid . ","),
-                'file_type' => DiskFactory::resloveFileType($fileExtension),
+                'file_type' => DiskFactory::resolveFileType($fileExtension),
                 'file_extension' => $fileExtension,
                 'user_uuid' => onlineMember()->getUuid(),
                 'create_user' => onlineMember()->getUuid()

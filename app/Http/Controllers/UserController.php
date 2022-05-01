@@ -7,10 +7,13 @@ use App\Exceptions\NoLoginException;
 
 use App\Models\Cloud\Disk;
 use App\Models\Log\LogUserStatus;
+use App\Models\Member\PersonalTheme;
 use App\Models\Member\Role;
 use App\Models\Member\UserRole;
 use App\Service\Auth\RoleAuthDevice;
 use App\Service\Auth\RoleMenuDevice;
+use App\Service\Disk\Config\DiskConfig;
+use App\Service\Disk\DiskFactory;
 use App\Service\Message\Driver\MessageException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -243,8 +246,11 @@ class UserController extends Controller
         //查看当前用户所有硬盘数量
         $user['sign_disk'] = (new Disk())->getUserCount($user['user_uuid']);
 
+
         return api_response_action(true, 0, '登录成功', $user);
     }
+
+
 
 
     /**
@@ -380,8 +386,11 @@ class UserController extends Controller
         }
         $user = onlineMember()->getUserModel();
         if (str_contains($data['user_header'], 'cache/')) {
-            $headerPath = 'users/' . $user->user_id . '/data/header.' . explode('.', $data['user_header'])[1];
-            cloudDisk()->move($data['user_header'], $headerPath);
+            $headerPath = 'specat-cloud/users/' . $user->user_id . '/data/header.' . explode('.', $data['user_header'])[1];
+            $diskConfig = new DiskConfig();
+            $diskConfig->setSystemDisk();
+            $disk = DiskFactory::build($diskConfig);
+            $disk->move($data['user_header'], $headerPath);
             $data['user_header'] = $headerPath;
         }
 //        if (!is_numeric($data['user_birthday'])) {
@@ -567,7 +576,7 @@ class UserController extends Controller
             'user_uuid' => $uuid,
             'content' => $content,
             'ip' => request()->ip(),
-            'created_at' =>date('Y-m-d H:i:s'),
+            'created_at' => date('Y-m-d H:i:s'),
             'user_status' => $userStatus,
             'status_time' => $statusTime
         ]);

@@ -46,9 +46,22 @@ class OssDriver implements DiskFactoryInterface
             $this->message = '大小不能超过' . round($this->config->getMaxSize() / 1024, 2) . "MB";
             return false;
         }
-        $this->resloveFileType($fileExtension);
+        $this->resolveFileType($fileExtension);
         $realPath = $file->getRealPath();
+
+        /** 重构图片大小 */
+        if (isset($option['resize']) && is_array($option['resize'])) {
+            if (is_numeric($option['resize']['width']) && is_numeric($option['resize']['height'])) {
+                $img = $this->resizeImage($fileExtension, $file->getRealPath(), $option['resize']['width'], $option['resize']['height']);
+                if ($img) {
+                    unlink($realPath);
+                    $realPath = $img;
+                }
+            }
+        }
+
         $this->path = $diyPath ? $diyPath : $this->generateResourcePath($fileExtension);
+
         if (!$this->initClient()) return false;
         try {
             $flag = $this->ossClient->uploadFile($this->config->getBucket(), $this->path, $realPath);
@@ -58,21 +71,33 @@ class OssDriver implements DiskFactoryInterface
                 return true;
             }
         } catch (\Exception $e) {
-            var_dump($e->getMessage());
-            $this->message = $e->getMessage() || '未知错误';
+            $this->message = $e->getMessage() ? $e->getMessage() : '未知错误';
             return false;
         }
         return false;
 
     }
 
-    public function generateResourcePath($fileExtension)
+    /**
+     * 生成资源路径
+     * @date : 2022/5/1 19:15
+     * @param $fileExtension
+     * @return string
+     * @author : 孤鸿渺影
+     */
+    public function generateResourcePath($fileExtension): string
     {
-        $path = $this->config->getBasePath() . '/' . date('Y/m/d') . '/' . getUuid() . '.' . $fileExtension;
-        return $path;
+        return $this->config->getBasePath() . '/' . date('Y/m/d') . '/' . getUuid() . '.' . $fileExtension;
     }
 
-    public function resloveFileType($fileExtension)
+    /**
+     * 解析文件类型
+     * @date : 2022/5/1 19:15
+     * @param $fileExtension
+     * @return string
+     * @author : 孤鸿渺影
+     */
+    public function resolveFileType($fileExtension): string
     {
         $data = [
             'image' => array('webp', 'jpg', 'png', 'ico', 'bmp', 'gif', 'tif', 'pcx', 'tga', 'bmp', 'pxc', 'tiff', 'jpeg', 'exif', 'fpx', 'svg', 'psd', 'cdr', 'pcd', 'dxf', 'ufo', 'eps', 'ai', 'hdri'),
@@ -93,11 +118,74 @@ class OssDriver implements DiskFactoryInterface
         return 'unknown';
     }
 
+    /**
+     *
+     * @date : 2022/5/1 19:21
+     * @param $ext
+     * @param $tmpName
+     * @param $xMax
+     * @param $yMax
+     * @return false|\GdImage|resource|string
+     * @author : 孤鸿渺影
+     */
+    public function resizeImage($ext, $tmpName, $xMax, $yMax)
+    {
+        if ($ext == "jpg" || $ext == "jpeg")
+            $im = imagecreatefromjpeg($tmpName);
+        elseif ($ext == "png")
+            $im = imagecreatefrompng($tmpName);
+        elseif ($ext == "gif")
+            $im = imagecreatefromgif($tmpName);
+        if (!$im) {
+            return false;
+        }
+        $x = imagesx($im);
+        $y = imagesy($im);
+
+        if ($x <= $xMax && $y <= $yMax)
+            return $im;
+
+        if ($x >= $y) {
+            $newX = $xMax;
+            $newY = $newX * $y / $x;
+        } else {
+            $newY = $yMax;
+            $newX = $x / $y * $newY;
+        }
+        $im2 = imagecreatetruecolor($newX, $newY);
+        imagecopyresized($im2, $im, 0, 0, 0, 0, floor($newX), floor($newY), $x, $y);
+
+        $fileName = "${$tmpName}-1.${ext}";
+        if ($ext == "jpg" || $ext == "jpeg") {
+            imagejpeg($im2, $fileName);
+        } elseif ($ext == "png") {
+            imagepng($im2, $fileName);
+        } elseif ($ext == "gif") {
+            imagegif($im2, $fileName);
+        }
+        return $fileName;
+    }
+
+    /**
+     * 获取文件类型
+     * @date : 2022/5/1 19:17
+     * @return string
+     * @author : 孤鸿渺影
+     */
     public function getFileType(): string
     {
         return $this->type;
     }
 
+    /**
+     * 复制资源
+     * @date : 2022/5/1 19:17
+     * @param string $oldPath
+     * @param string $newPath
+     * @return bool
+     * @throws \OSS\Core\OssException
+     * @author : 孤鸿渺影
+     */
     public function copy(string $oldPath, string $newPath): bool
     {
         // TODO: Implement copy() method.
@@ -113,6 +201,13 @@ class OssDriver implements DiskFactoryInterface
         return false;
     }
 
+    /**
+     * 判断资源是否存在
+     * @date : 2022/5/1 19:17
+     * @param string $path
+     * @return bool
+     * @author : 孤鸿渺影
+     */
     public function exist(string $path): bool
     {
         // TODO: Implement exist() method.
@@ -128,6 +223,15 @@ class OssDriver implements DiskFactoryInterface
         return true;
     }
 
+    /**
+     * 资源移动
+     * @date : 2022/5/1 19:18
+     * @param string $oldPath
+     * @param string $newPath
+     * @return bool
+     * @throws \OSS\Core\OssException
+     * @author : 孤鸿渺影
+     */
     public function move(string $oldPath, string $newPath): bool
     {
         // TODO: Implement move() method.
@@ -145,6 +249,13 @@ class OssDriver implements DiskFactoryInterface
         return false;
     }
 
+    /**
+     * 资源删除
+     * @date : 2022/5/1 19:18
+     * @param string $path
+     * @return bool
+     * @author : 孤鸿渺影
+     */
     public function delete(string $path): bool
     {
         // TODO: Implement delete() method.
