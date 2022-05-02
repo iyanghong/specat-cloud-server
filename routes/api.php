@@ -166,6 +166,7 @@ Route::group(['prefix' => 'cloud'], function () {
     Route::post('resource/create/{resourceUuid}', '\App\Http\Controllers\Cloud\ResourceController@createDirectory')->name('cloud.resource.create.resource');
     Route::patch('resource/rename/{resourceUid}', '\App\Http\Controllers\Cloud\ResourceController@uploadResourceName')->name('cloud.resource.rename.resource');
 
+    Route::post('resource/{currentUid}/to/{targetDisk}/{targetUid}/copy', '\App\Http\Controllers\Cloud\ResourceController@copyResource');
     Route::get('resource/desktop', '\App\Http\Controllers\Cloud\ResourceController@getDesktopResources')->name('cloud.resource.desktop');
     Route::get('resource/{diskUid}/{resourceUid}/list', '\App\Http\Controllers\Cloud\ResourceController@getDiskResourcesByResource')->name('cloud.disk.resource.list');
     Route::post('resource/{uuid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile')->name('cloud.resource.upload');

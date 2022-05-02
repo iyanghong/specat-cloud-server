@@ -18,6 +18,16 @@ class Resource extends BaseModel
     protected $dateFormat = 'Y-m-d H:i:s';
     protected $fillable = ["uuid", "parent", "parent_all", "disk_uuid", "name", "type", "file_type", "file_extension", "size", "cover", "user_uuid", "create_user", "update_user"];
 
+    public function child()
+    {
+        return $this->hasMany('App\Models\Cloud\Resource', 'parent', 'uuid')->select();
+    }
+
+    public function children()
+    {
+        return $this->child()->with('children');
+    }
+
     /**
      *
      * @date : 2022/4/26 11:27
@@ -46,6 +56,7 @@ class Resource extends BaseModel
      * @date : 2022/4/26 22:49
      * @param $fileName
      * @param $fileExtension
+     * @param bool $isFile
      * @return mixed
      * @author : 孤鸿渺影
      */

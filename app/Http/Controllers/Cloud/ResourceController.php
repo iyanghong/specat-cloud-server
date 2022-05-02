@@ -632,4 +632,85 @@ class ResourceController extends Controller
         $path = trim($basePath, '/') . '/' . $resource->getResourceDirectory();
         $diskDriver->delete(trim($path, '/'));
     }
+
+
+    public function copyResource($currentUid, $targetDisk, $targetUid)
+    {
+        $resourceModel = new Resource();
+        $targetResource = $resourceModel->findIdOrUuid($targetUid);
+        if (!$targetResource) {
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '目标资源不存在');
+        }
+        $diskModel = new Disk();
+        $disk = $diskModel->findIdOrUuid($targetResource->disk_uuid);
+        if (!$disk) {
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '磁盘不存在');
+        }
+        $currentResource = $resourceModel->where(['uuid' => $currentUid])->with('children')->first();
+        if (!$currentResource) {
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '当前资源不存在');
+        }
+
+        DB::beginTransaction();
+        $resourceName = $currentResource->name;
+        $index = 0;
+        $repeatResource = null;
+        do {
+            if ($index > 0) {
+                $resourceName = "${resourceName}_副本";
+            }
+            $index++;
+            $repeatResource = $targetResource->getRepeatNameResource($resourceName, $currentResource->file_extension, $currentResource->type == 'file');
+        } while ($repeatResource);
+        $diskConfig = new DiskConfig($disk);
+        $basePath = rtrim($diskConfig->getBasePath(), '/') . '/' . $targetResource->parent_all ? $targetResource->getResourceDirectory() : $targetResource->name;
+
+        $this->doCopyRecursive($currentResource, $targetResource, $diskConfig, $basePath, $resourceName);
+        DB::commit();
+        return api_response_action(true);
+    }
+
+    /**
+     *
+     * @date : 2022/5/2 20:35
+     * @param $resource Model 需要复制的资源
+     * @param $targetResource Model 复制到xx的资源
+     * @param $diskConfig
+     * @param string $basePath
+     * @param string $resourceName
+     * @author : 孤鸿渺影
+     */
+    private function doCopyRecursive($resource, $targetResource, $diskConfig, $basePath = '', $resourceName = '')
+    {
+        $data = [
+            'uuid' => getUuid(),
+            'user_uuid' => onlineMember()->getUuid(),
+            'disk_uuid' => $targetResource['disk_uuid'],
+            'create_user' => onlineMember()->getUuid(),
+            'name' => $resourceName ? $resourceName : $resource['name'],
+            'size' => $resource['size'],
+            'file_extension' => $resource['file_extension'],
+            'cover' => $resource['cover'],
+            'parent' => $targetResource['uuid'],
+            'parent_all' => $targetResource->parent_all . $targetResource->uuid . ",",
+            'type' => $resource['type']
+        ];
+        if ($resource->type === 'file') {
+            $driver = DiskFactory::build($diskConfig);
+            $oldPath = rtrim($diskConfig->getBasePath(), '/') . '/' . $resource->getResourceDirectory();
+            $newPath = $basePath . '/' . $data['name'] . "." . $data['file_extension'];
+            $driver->copy($oldPath, $newPath);
+            (new Resource())->create($data);
+        } else {
+
+            $createResource = (new Resource())->create($data);
+            if ($createResource && !empty($resource->children)) {
+                $createResource->refresh();
+                foreach ($resource->children as $item) {
+                    $this->doCopyRecursive($item, $createResource, $diskConfig, $basePath . "/" . $createResource->name);
+                }
+            }
+        }
+
+    }
 }
