@@ -121,10 +121,11 @@ class ResourceController extends Controller
                 $resource['path'] = $accessPath . '/' . $resource->getResourceDirectory() . $resource->name . '.' . $resource->file_extension;
             }
         }
-
+        $resource = empty($currentResource) ? ['disk_uuid' => $disk->uuid] : $currentResource;
         return api_response_show([
             'location' => $location,
-            'list' => $resources
+            'list' => $resources,
+            'resource' => $resource
         ]);
     }
 
