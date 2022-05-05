@@ -23,7 +23,6 @@ class EnableCrossRequest
         $response = $next($request);
         $origin = $request->server('HTTP_ORIGIN') ? $request->server('HTTP_ORIGIN') : '*';
         $allow_origin = systemConfig()->get('Sys.EnableCrossRequest', null) ?? config('EnableCrossRequest');
-
         if (!is_array($allow_origin)) {
             $allow_origin = json_decode($allow_origin, true);
         }

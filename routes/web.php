@@ -14,6 +14,6 @@ use Illuminate\Support\Facades\Route;
 */
 Route::any('api/test','TestController@main')->name('test');
 
-
+Route::get('cloud/resource/progress/{key}', '\App\Http\Controllers\Cloud\ResourceController@getProgress');
 
 

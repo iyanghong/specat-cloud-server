@@ -12,6 +12,9 @@ use App\Models\Member\PersonalTheme;
 use App\Service\Disk\Config\DiskConfig;
 use App\Service\Disk\DiskFactory;
 use App\Service\Disk\Factory\DiskFactoryInterface;
+use App\Service\Progress\ProgressInterface;
+use App\Service\Progress\ResourceProgress;
+use Illuminate\Filesystem\Cache;
 use Illuminate\Http\Request;
 use App\Models\Cloud\Resource;
 use Illuminate\Support\Facades\DB;
@@ -275,8 +278,10 @@ class ResourceController extends Controller
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, $diskDriver->getMessage());
         }
         DB::commit();
+        $resourceFlag->path = $diskConfig->getAccessPath() . '/' . $diskDriver->getPath();
         return api_response_action(true, ErrorCode::$ENUM_SUCCESS, $diskDriver->getMessage(), [
-            'url' => $diskDriver->getPath()
+            'url' => $diskDriver->getPath(),
+            'data' => $resourceFlag
         ]);
 
 
@@ -589,47 +594,87 @@ class ResourceController extends Controller
 
         $basePath = trim($disk->base_path, '/');
         $diskDriver = DiskFactory::build($diskConfig);
+
+        //生成进度条
+        $resourceProgress = null;
+        if (\request()->input('progress')) {
+            $resourceProgress = new ResourceProgress(\request()->input('progress'));
+        }
+
         if ($resource->type === 'file') {
-            $this->deleteResource($diskDriver, $basePath, $resource);
+            if ($resourceProgress) {
+                $resourceProgress->setTotal(0);
+                $resourceProgress->setTotalSize($resource->size);
+                $resourceProgress->setStatus('开始');
+                $resourceProgress->save();
+            }
+            $this->deleteResource($resourceProgress, $diskDriver, $basePath, $resource);
         } else if ($resource->type === 'desktop') {
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '桌面无法删除');
         } else {
             $list = $resourceModel->where([
                 ['parent_all', 'like', $resource->parent_all . $resource->uuid . '%'],
             ])->get();
+            //计算需要操作的资源，更新进度
+            if ($resourceProgress) {
+                $total = 1;
+                $size = 0;
+                foreach ($list as $item) {
+                    $total++;
+                    $size += ($item->size ?? 0);
+                }
+
+                $resourceProgress->setTotal($total);
+                $resourceProgress->setTotalSize($size);
+                $resourceProgress->setStatus('开始');
+                $resourceProgress->save();
+            }
 
             //分开两次遍历防止因为过早删除导致父找不到
             foreach ($list as $item) {
                 if ($item->type === 'file') {
-                    $this->deleteResource($diskDriver, $basePath, $item);
+                    $this->deleteResource($resourceProgress, $diskDriver, $basePath, $item);
                 }
             }
             foreach ($list as $item) {
                 if ($item->type === 'directory') {
+                    if ($resourceProgress) {
+                        $resourceProgress->increment($item->size ?? 0, $item->name);
+                        $resourceProgress->save();
+                    }
                     $item->delete();
                 }
             }
 
         }
+
         $flag = $resource->delete();
         if ($flag) {
             DB::commit();
+            if($resourceProgress){
+                $resourceProgress->remove();
+            }
             return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '删除成功');
         }
         DB::rollBack();
-        return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '删除失败');;
+        return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '删除失败');
     }
 
     /**
      *
      * @date : 2022/4/26 23:18
+     * @param ResourceProgress|null $resourceProgress
      * @param DiskFactoryInterface $diskDriver
      * @param $basePath
      * @param $resource
      * @author : 孤鸿渺影
      */
-    private function deleteResource(DiskFactoryInterface $diskDriver, $basePath, $resource)
+    private function deleteResource(?ResourceProgress $resourceProgress, DiskFactoryInterface $diskDriver, $basePath, $resource)
     {
+        if ($resourceProgress) {
+            $resourceProgress->increment($resource->size, $resource->name);
+            $resourceProgress->save();
+        }
         $path = trim($basePath, '/') . '/' . $resource->getResourceDirectory();
         $diskDriver->delete(trim($path, '/'));
     }
@@ -651,7 +696,41 @@ class ResourceController extends Controller
         if (!$currentResource) {
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '当前资源不存在');
         }
+        $resourceProgress = null;
+        if (\request()->input('progress')) {
+            $resourceProgress = new ResourceProgress(\request()->input('progress'));
+            $total = 1;
+            $size = $currentResource->size ?? 0;
+            if ($currentResource->type != 'file' && !empty($currentResource->children)) {
+                function computed($list)
+                {
+                    $t = 0;
+                    $s = 0;
+                    foreach ($list as $key => $item) {
+                        $t++;
+                        $s += $item->size ?? 0;
+                        if ($item->type != 'file' && !empty($item->children)) {
+                            $total = computed($item->children);
+                            $t += $total['total'];
+                            $s += $total['size'];
+                        }
+                    }
+                    return [
+                        'total' => $t,
+                        'size' => $s
+                    ];
+                }
 
+                $computedData = computed($currentResource->children);
+                $total += $computedData['total'];
+                $size += $computedData['size'];
+                $resourceProgress->setTotal($total);
+                $resourceProgress->setTotalSize($size);
+            }
+            $resourceProgress->setStatus('开始');
+            $resourceProgress->save();
+
+        }
         DB::beginTransaction();
         $resourceName = $currentResource->name;
         $index = 0;
@@ -666,7 +745,12 @@ class ResourceController extends Controller
         $diskConfig = new DiskConfig($disk);
         $basePath = rtrim($diskConfig->getBasePath(), '/') . '/' . $targetResource->parent_all ? $targetResource->getResourceDirectory() : $targetResource->name;
 
-        $this->doCopyRecursive($currentResource, $targetResource, $diskConfig, $basePath, $resourceName);
+        $this->doCopyRecursive($resourceProgress, $currentResource, $targetResource, $diskConfig, $basePath, $resourceName);
+        if($resourceProgress){
+            $resourceProgress->setStatus('已完成');
+            $resourceProgress->remove();
+        }
+
         DB::commit();
         return api_response_action(true);
     }
@@ -681,7 +765,7 @@ class ResourceController extends Controller
      * @param string $resourceName
      * @author : 孤鸿渺影
      */
-    private function doCopyRecursive($resource, $targetResource, $diskConfig, $basePath = '', $resourceName = '')
+    private function doCopyRecursive(?ResourceProgress $resourceProgress, $resource, $targetResource, $diskConfig, $basePath = '', $resourceName = '')
     {
         $data = [
             'uuid' => getUuid(),
@@ -696,22 +780,45 @@ class ResourceController extends Controller
             'parent_all' => $targetResource->parent_all . $targetResource->uuid . ",",
             'type' => $resource['type']
         ];
+
+        if ($resourceProgress) {
+            $resourceProgress->increment($data['size'] ?? 0, $data['name']);
+            $resourceProgress->save();
+        }
+
         if ($resource->type === 'file') {
+
             $driver = DiskFactory::build($diskConfig);
             $oldPath = rtrim($diskConfig->getBasePath(), '/') . '/' . $resource->getResourceDirectory();
             $newPath = $basePath . '/' . $data['name'] . "." . $data['file_extension'];
             $driver->copy($oldPath, $newPath);
             (new Resource())->create($data);
+
         } else {
 
             $createResource = (new Resource())->create($data);
             if ($createResource && !empty($resource->children)) {
                 $createResource->refresh();
                 foreach ($resource->children as $item) {
-                    $this->doCopyRecursive($item, $createResource, $diskConfig, $basePath . "/" . $createResource->name);
+                    $this->doCopyRecursive($resourceProgress, $item, $createResource, $diskConfig, $basePath . "/" . $createResource->name);
                 }
             }
+
         }
 
+    }
+
+
+    /**
+     * 获取进度
+     * @date : 2022/5/5 10:32
+     * @param $key
+     * @return string
+     * @author : 孤鸿渺影
+     */
+    public function getProgress($key): string
+    {
+        $data = \Illuminate\Support\Facades\Cache::get("progress:resource_${key}");
+        return api_response_show(json_decode($data, true));
     }
 }

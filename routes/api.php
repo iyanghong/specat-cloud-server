@@ -172,6 +172,7 @@ Route::group(['prefix' => 'cloud'], function () {
     Route::post('resource/{uuid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile')->name('cloud.resource.upload');
     Route::post('resource/{uuid}/{diskUid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile')->name('cloud.disk.resource.upload');
     Route::get('resource/{resourceUid}/list', '\App\Http\Controllers\Cloud\ResourceController@getResourceList')->name('cloud.resource.all.list');
+
     /** 资源 资源接口集合 : cloud/resource */
     Route::resource('resource', '\App\Http\Controllers\Cloud\ResourceController')->names('cloud.Resource');
 

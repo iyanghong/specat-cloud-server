@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Core\Enums\ErrorCode;
+use App\Core\Utils\CurlHttp;
 use App\Models\Cloud\Resource;
 use App\Models\User;
 use App\Service\Disk\Config\DiskConfig;
@@ -16,11 +17,31 @@ class TestController extends Controller
 
     public function main()
     {
-        $resourcesModel = new Resource();
-        $resource = $resourcesModel->findIdOrUuid('844065c8c49b11ec8b120242ac110002');
-        var_dump($resource->getResourceDirectory());
+        $http = new CurlHttp();
+        $response = $http->http([
+            'url' => 'https://imginn.com/75_yabuki/',
+            'headers' => [
+                ':authority' => 'imginn.com',
+                ':method' => 'GET',
+                ':path' => '/75_yabuki/',
+                ':scheme' => 'https',
+                'accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+                'accept-encoding' => 'gzip, deflate, br',
+                'accept-language' => 'zh-CN,zh;q=0.9',
+                'Cookie' => '_ga=GA1.2.352154297.1651738276; _gid=GA1.2.2007318659.1651738276; __cf_bm=rGWsf31K7IQjB6VITrNC6kfY6mKHIHwD1N9VLT5Lhqw-1651738278-0-AYGCNFNtzr0rLnEuBHHS/nutGVC11hzViLJvuxieATTuMP9xAUq731U+8Tx0T5TT9gpy9Akj/y+bevXJ0e8YzVs47hEL9clgTQgZY+rl3zExUHU1ACJSZNpPgf8hwQvmOw==; __gads=ID=144e631d91433e5c:T=1651738278:S=ALNI_MYBcqjhQ-x7cWjoonNBHuh3F2CA5Q; __gpi=UID=0000052b576ecb92:T=1651738278:RT=1651738278:S=ALNI_MYZmvMLmavkpxXZWRgeE-8t-6zO1A',
+                'sec-ch-ua' => '" Not A;Brand";v="99", "Chromium";v="101", "Google Chrome";v="101"',
+                'sec-ch-ua-mobile' => '?0',
+                'sec-ch-ua-platform' => '"Windows"',
+                'sec-fetch-dest' => 'document',
+                'sec-fetch-mode' => 'navigate',
+                'sec-fetch-site' => 'none',
+                'sec-fetch-user' => '?1',
+                'upgrade-insecure-requests' => '1',
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36'
+            ]
+        ]);
 
-//        return api_response_show($list);
+        echo $response;
 
     }
 

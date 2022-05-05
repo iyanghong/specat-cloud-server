@@ -51,11 +51,11 @@ class CurlHttp
      * @param array $params
      * @param \Closure|null $closure
      * @date : 2021/7/16 19:19
-     * @author : 孤鸿渺影
      * @return bool|string
      * @throws \Exception
+     * @author : 孤鸿渺影
      */
-    public function get($url,array $params = [],\Closure $closure = null)
+    public function get($url, array $params = [], \Closure $closure = null)
     {
         $options = [
             'url' => $url,
@@ -72,11 +72,11 @@ class CurlHttp
      * @param array $data
      * @param \Closure|null $closure
      * @date : 2021/7/16 19:26
-     * @author : 孤鸿渺影
      * @return bool|string
      * @throws \Exception
+     * @author : 孤鸿渺影
      */
-    public function post($url,array $data = [],\Closure $closure = null)
+    public function post($url, array $data = [], \Closure $closure = null)
     {
         $options = [
             'url' => $url,
@@ -89,7 +89,7 @@ class CurlHttp
 
     public function http(array $options = [])
     {
-        if(empty($options['url'])) throw new \Exception('url不能为空');
+        if (empty($options['url'])) throw new \Exception('url不能为空');
         $url = $options['url'];
         $method = $options['method'] ?? $this->options['method'];
         $headers = (isset($options['headers']) && is_array($options['headers'])) ? $options['headers'] : $this->options['headers'];
@@ -98,7 +98,7 @@ class CurlHttp
         $success = (isset($options['success']) && $this->is_function($options['success'])) ? $options['success'] : $this->options['success'];
         $error = (isset($options['error']) && $this->is_function($options['error'])) ? $options['error'] : $this->options['error'];
         $finally = (isset($options['finally']) && $this->is_function($options['finally'])) ? $options['finally'] : $this->options['finally'];
-        $responseType = (isset($options['responseType']) && in_array($options['responseType'],['text','json'])) ? $options['responseType'] : $this->options['responseType'];
+        $responseType = (isset($options['responseType']) && in_array($options['responseType'], ['text', 'json'])) ? $options['responseType'] : $this->options['responseType'];
 
         $curl = curl_init();
         //请求类型
@@ -109,17 +109,23 @@ class CurlHttp
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($curl, CURLOPT_HEADER, false);
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT_MS, (isset($options['timeout']) && is_numeric($options['timeout'])) ? $options['timeout'] : $this->options['timeout']);
-        if($method === 'POST'){
-            curl_setopt($curl,CURLOPT_POST,true);
-            curl_setopt($curl,CURLOPT_POSTFIELDS,$data);
+        if ($method === 'POST') {
+            curl_setopt($curl, CURLOPT_POST, true);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+        }
+        if (is_array($options['headers'])) {
+            curl_setopt($curl, CURLOPT_HTTPHEADER, $options['headers']);
+            /*if (isset($options['headers']['cookie'])) {
+                curl_setopt($curl, CURLOPT_COOKIE, $options['headers']['cookie']);
+            }*/
         }
         // 解析url参数
         $paramStr = '';
-        foreach ($params as $key => $param){
-            $paramStr !== '' && ($paramStr .="&");
+        foreach ($params as $key => $param) {
+            $paramStr !== '' && ($paramStr .= "&");
             $paramStr .= $key . "=" . urlencode($param);
         }
-        if($paramStr){
+        if ($paramStr) {
             $url .= '?' . $paramStr;
         }
         // 请求地址
@@ -130,18 +136,18 @@ class CurlHttp
         }
         $out_put = curl_exec($curl);
         if (curl_error($curl)) {
-            if($error){
+            if ($error) {
                 $error($curl);
             }
         } else {
-            if($responseType == 'json'){
-                $out_put = json_decode($out_put,true);
+            if ($responseType == 'json') {
+                $out_put = json_decode($out_put, true);
             }
-            if($success){
+            if ($success) {
                 $success($out_put);
             }
         }
-        if($finally){
+        if ($finally) {
             $finally($out_put);
         }
 
@@ -154,10 +160,11 @@ class CurlHttp
      * 判断是否是方法
      * @param $f
      * @date : 2021/7/16 19:50
-     * @author : 孤鸿渺影
      * @return bool
+     * @author : 孤鸿渺影
      */
-    private function is_function($f) {
+    private function is_function($f)
+    {
         return (is_string($f) && function_exists($f)) || (is_object($f) && ($f instanceof \Closure));
     }
 }
