@@ -1,9 +1,10 @@
 <?php
-define('CACHE_TIME',84600);
+define('CACHE_TIME', 84600);
 
 
-function getUserIdCode($userId){
-    $arr = ['a','c','d','e','f','g'];
+function getUserIdCode($userId)
+{
+    $arr = ['a', 'c', 'd', 'e', 'f', 'g'];
 }
 
 /**
@@ -27,6 +28,15 @@ function ucfirstAll($value, $format = '_', $addFormat = '')
     return $name;
 }
 
+function getResourcesPath(...$paths): string
+{
+    $path = '';
+    foreach ($paths as $item) {
+        $path = $path . '/' . trim($item, '/');
+    }
+    return trim($path, '/');
+}
+
 /**
  * 获取设备信息
  * @return string
@@ -46,7 +56,6 @@ function getRequestAgentOrigin(): string
     $browser && $origin .= "$browser $browserVersion;";
     return $origin;
 }
-
 
 
 function toArray($object)
@@ -146,8 +155,7 @@ function forgetCache($keys)
 function arrayTransitionObject(array $array)
 {
     if (is_array($array)) {
-        $obj = new class
-        {
+        $obj = new class {
         };
         foreach ($array as $key => $val) {
             $obj->$key = $val;

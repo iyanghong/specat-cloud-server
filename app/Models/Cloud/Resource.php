@@ -31,10 +31,10 @@ class Resource extends BaseModel
     /**
      *
      * @date : 2022/4/26 11:27
-     * @return string|void
+     * @return string
      * @author : 孤鸿渺影
      */
-    public function getResourceDirectory($parentAll = '')
+    public function getResourcePath($parentAll = '', $isParentDirectory = false)
     {
 
         if (empty($parentAll)) $parentAll = $this->parent_all;
@@ -45,10 +45,39 @@ class Resource extends BaseModel
             foreach ($parentList as $parentItem) {
                 $path[] = $parentItem->name;
             }
-            $path[] = $this->name . ($this->file_extension ? '.' . $this->file_extension : '');
+            if ($isParentDirectory == false) {
+                $path[] .= $this->name .($this->file_extension ? '.' . $this->file_extension : '');
+            }
             return implode('/', $path);
         }
         return '';
+    }
+
+
+    /**
+     *
+     * @date : 2022/5/6 19:45
+     * @return mixed
+     * @author : 孤鸿渺影
+     */
+    public function getChildrenFiles(): array
+    {
+        return $this->where([
+            'type' => 'file',
+            ['parent_all', 'like', $this->parent_all . $this->uuid . '%'],
+        ])->get();
+    }
+
+    /**
+     *
+     * @date : 2022/5/6 19:47
+     * @return bool
+     * @author : 孤鸿渺影
+     */
+    public function isHashChildren(): bool
+    {
+        if ($this->type === 'file') return false;
+        return $this->where(['parent' => $this->uuid, 'type' => 'file'])->count();
     }
 
     /**

@@ -18,6 +18,7 @@ use Illuminate\Filesystem\Cache;
 use Illuminate\Http\Request;
 use App\Models\Cloud\Resource;
 use Illuminate\Support\Facades\DB;
+use JetBrains\PhpStorm\ArrayShape;
 use PhpParser\Builder;
 use Psr\SimpleCache\InvalidArgumentException;
 
@@ -104,7 +105,7 @@ class ResourceController extends Controller
                 return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '资源不存在');
             }
             $location = $currentResource->getLocation();
-            $accessPath = $accessPath . '/' . $currentResource->getResourceDirectory();
+            $accessPath = $accessPath . '/' . $currentResource->getResourcePath();
         }
 
         array_unshift($location, [
@@ -121,7 +122,7 @@ class ResourceController extends Controller
 
         foreach ($resources as $resource) {
             if ($resource->type === 'file') {
-                $resource['path'] = $accessPath . '/' . $resource->getResourceDirectory() . $resource->name . '.' . $resource->file_extension;
+                $resource['path'] = $accessPath . '/' . $resource->getResourcePath() . $resource->name . '.' . $resource->file_extension;
             }
         }
         $resource = empty($currentResource) ? ['disk_uuid' => $disk->uuid] : $currentResource;
@@ -320,7 +321,7 @@ class ResourceController extends Controller
             'parent' => $resourceUid
         ])->get();
         foreach ($list as $key => $item) {
-            $list[$key]['path'] = rtrim($accessPath, '/') . '/' . $item->getResourceDirectory();
+            $list[$key]['path'] = rtrim($accessPath, '/') . '/' . $item->getResourcePath();
         }
         return $list;
     }
@@ -465,26 +466,48 @@ class ResourceController extends Controller
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '名称重复');
         }
         DB::beginTransaction();
-        if ($resource->type === 'file') {
-            $oldPath = $resource->getResourceDirectory();
+        $needRenameDiskResource = $resource->type == 'file' || $resource->isHashChildren();
+        if ($needRenameDiskResource) {
+            $oldName = $resource->name;
         }
         $resource->name = $name;
         $flag = $resource->save();
         if ($flag) {
-            if ($resource->type === 'file') {
+            if ($needRenameDiskResource) {
                 $resource = $resource->refresh();
                 $diskModel = new Disk();
                 $disk = $diskModel->findIdOrUuid($resource->disk_uuid);
-
-                $newPath = $resource->getResourceDirectory();
                 $diskConfig = new DiskConfig($disk->toArray());
                 $diskDriver = DiskFactory::build($diskConfig);
-                $oldPath = trim($diskConfig->getBasePath(), '/') . '/' . $oldPath;
-                $newPath = trim($diskConfig->getBasePath(), '/') . '/' . $newPath;
-                $flag = $diskDriver->move($oldPath, $newPath);
-                if ($flag == false) {
-                    DB::rollBack();
-                    return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, $diskDriver->getMessage());
+                $oldPath = trim($diskConfig->getBasePath(), '/') . '/' . $resource->getResourcePath('', true);
+                $newPath = trim($diskConfig->getBasePath(), '/') . '/' . $resource->getResourcePath('', true);
+                $resourceProgress = null;
+                if (\request()->input('progress')) {
+                    $resourceProgress = new ResourceProgress(\request()->input('progress'));
+                }
+                $total = 1;
+                $size = $resource->size ?? 0;
+                if ($resource->type != 'file') {
+                    $resource = $resourceModel->where(['uuid' => $resourceUid])->with('children')->first();
+                    if ($resourceProgress) {
+                        $computedData = $this->computedResourceSizeAndSize($resource->children);
+                        $total = $computedData['total'];
+                        $size = $computedData['size'];
+                    }
+                } else {
+                    $resource = $resource->refresh();
+                }
+                if ($resourceProgress) {
+                    $resourceProgress->setTotal($total);
+                    $resourceProgress->setTotalSize($size);
+                    $resourceProgress->setStatus('开始');
+                    $resourceProgress->save();
+                }
+
+                $this->doRenameResource($resourceProgress, $resource, $diskDriver, $oldPath, $newPath, $oldName);
+
+                if ($resourceProgress) {
+                    $resourceProgress->remove();
                 }
             }
             DB::commit();
@@ -492,6 +515,43 @@ class ResourceController extends Controller
         }
         DB::rollBack();
         return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '重命名失败');
+    }
+
+    /**
+     * 重命名资源需要递归操作的云盘物理文件
+     * @date : 2022/5/6 20:53
+     * @param ResourceProgress|null $progress 进度
+     * @param $resource mixed 资源
+     * @param DiskFactoryInterface $diskDriver 磁盘
+     * @param string $baseOldPath 旧根路径
+     * @param string $baseNewPath 新根路径
+     * @param string $diyName 用来标识顶层资源即将修改的资源名
+     * @return void
+     * @author : 孤鸿渺影
+     */
+    private function doRenameResource(?ResourceProgress $progress, $resource, DiskFactoryInterface $diskDriver, string $baseOldPath, string $baseNewPath, string $diyName = ''): void
+    {
+
+        if ($progress) {
+            $progress->increment($resource->size ?? 0, $resource->name);
+            $progress->save();
+        }
+        if ($resource->type == 'file') {
+            $oldPath = getResourcesPath($baseOldPath, empty($diyName) ? $resource->name : $diyName);
+            $newPath = getResourcesPath($baseNewPath, $resource->name);
+            $oldPath = $oldPath . '.' . $resource->file_extension;
+            $newPath = $newPath . '.' . $resource->file_extension;
+            $diskDriver->move($oldPath, $newPath);
+            return;
+        }
+        if (!empty($resource->children)) {
+            foreach ($resource->children as $key => $item) {
+                $oldPath = getResourcesPath($baseOldPath, empty($diyName) ? $resource->name : $diyName);
+                $newPath = getResourcesPath($baseNewPath, $resource->name);
+                $this->doRenameResource($progress, $item, $diskDriver, $oldPath, $newPath);
+            }
+        }
+
     }
 
     /**
@@ -651,7 +711,7 @@ class ResourceController extends Controller
         $flag = $resource->delete();
         if ($flag) {
             DB::commit();
-            if($resourceProgress){
+            if ($resourceProgress) {
                 $resourceProgress->remove();
             }
             return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '删除成功');
@@ -675,7 +735,7 @@ class ResourceController extends Controller
             $resourceProgress->increment($resource->size, $resource->name);
             $resourceProgress->save();
         }
-        $path = trim($basePath, '/') . '/' . $resource->getResourceDirectory();
+        $path = trim($basePath, '/') . '/' . $resource->getResourcePath();
         $diskDriver->delete(trim($path, '/'));
     }
 
@@ -702,26 +762,7 @@ class ResourceController extends Controller
             $total = 1;
             $size = $currentResource->size ?? 0;
             if ($currentResource->type != 'file' && !empty($currentResource->children)) {
-                function computed($list)
-                {
-                    $t = 0;
-                    $s = 0;
-                    foreach ($list as $key => $item) {
-                        $t++;
-                        $s += $item->size ?? 0;
-                        if ($item->type != 'file' && !empty($item->children)) {
-                            $total = computed($item->children);
-                            $t += $total['total'];
-                            $s += $total['size'];
-                        }
-                    }
-                    return [
-                        'total' => $t,
-                        'size' => $s
-                    ];
-                }
-
-                $computedData = computed($currentResource->children);
+                $computedData = $this->computedResourceSizeAndSize($currentResource->children);
                 $total += $computedData['total'];
                 $size += $computedData['size'];
                 $resourceProgress->setTotal($total);
@@ -743,9 +784,9 @@ class ResourceController extends Controller
             $repeatResource = $targetResource->getRepeatNameResource($resourceName, $currentResource->file_extension, $currentResource->type == 'file');
         } while ($repeatResource);
         $diskConfig = new DiskConfig($disk);
-        $basePath = rtrim($diskConfig->getBasePath(), '/') . '/' . ($targetResource->parent_all ? $targetResource->getResourceDirectory() : $targetResource->name);
+        $basePath = rtrim($diskConfig->getBasePath(), '/') . '/' . ($targetResource->parent_all ? $targetResource->getResourcePath() : $targetResource->name);
         $this->doCopyRecursive($resourceProgress, $currentResource, $targetResource, $diskConfig, $basePath, $resourceName);
-        if($resourceProgress){
+        if ($resourceProgress) {
             $resourceProgress->setStatus('已完成');
             $resourceProgress->remove();
         }
@@ -788,7 +829,7 @@ class ResourceController extends Controller
         if ($resource->type === 'file') {
 
             $driver = DiskFactory::build($diskConfig);
-            $oldPath = rtrim($diskConfig->getBasePath(), '/') . '/' . $resource->getResourceDirectory();
+            $oldPath = rtrim($diskConfig->getBasePath(), '/') . '/' . $resource->getResourcePath();
             $newPath = $basePath . '/' . $data['name'] . "." . $data['file_extension'];
             $driver->copy($oldPath, $newPath);
             (new Resource())->create($data);
@@ -807,6 +848,31 @@ class ResourceController extends Controller
 
     }
 
+    /**
+     * 递归计算资源大小与数量
+     * @date : 2022/5/6 21:00
+     * @param $list
+     * @return array
+     * @author : 孤鸿渺影
+     */
+    #[ArrayShape(['total' => "int|mixed", 'size' => "mixed"])] private function computedResourceSizeAndSize($list): array
+    {
+        $t = 0;
+        $s = 0;
+        foreach ($list as $key => $item) {
+            $t++;
+            $s += $item->size ?? 0;
+            if ($item->type != 'file' && !empty($item->children)) {
+                $total = $this->computedResourceSizeAndSize($item->children);
+                $t += $total['total'];
+                $s += $total['size'];
+            }
+        }
+        return [
+            'total' => $t,
+            'size' => $s
+        ];
+    }
 
     /**
      * 获取进度
