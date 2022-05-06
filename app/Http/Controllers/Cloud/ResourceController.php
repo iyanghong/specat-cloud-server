@@ -743,14 +743,12 @@ class ResourceController extends Controller
             $repeatResource = $targetResource->getRepeatNameResource($resourceName, $currentResource->file_extension, $currentResource->type == 'file');
         } while ($repeatResource);
         $diskConfig = new DiskConfig($disk);
-        $basePath = rtrim($diskConfig->getBasePath(), '/') . '/' . $targetResource->parent_all ? $targetResource->getResourceDirectory() : $targetResource->name;
-
+        $basePath = rtrim($diskConfig->getBasePath(), '/') . '/' . ($targetResource->parent_all ? $targetResource->getResourceDirectory() : $targetResource->name);
         $this->doCopyRecursive($resourceProgress, $currentResource, $targetResource, $diskConfig, $basePath, $resourceName);
         if($resourceProgress){
             $resourceProgress->setStatus('已完成');
             $resourceProgress->remove();
         }
-
         DB::commit();
         return api_response_action(true);
     }
@@ -775,6 +773,7 @@ class ResourceController extends Controller
             'name' => $resourceName ? $resourceName : $resource['name'],
             'size' => $resource['size'],
             'file_extension' => $resource['file_extension'],
+            'file_type' => $resource['file_type'],
             'cover' => $resource['cover'],
             'parent' => $targetResource['uuid'],
             'parent_all' => $targetResource->parent_all . $targetResource->uuid . ",",
