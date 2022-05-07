@@ -250,7 +250,7 @@ class ResourceController extends Controller
             /** @var  $resourceFlag \Illuminate\Database\Query\Builder */
             $repeatNameResource->size = $file->getSize();
             $resourceFlag = $repeatNameResource->save();
-            if($resourceFlag) $resourceFlag = $repeatNameResource;
+            if ($resourceFlag) $resourceFlag = $repeatNameResource;
         } else {
             $data = [
                 'uuid' => getUuid(),
@@ -279,8 +279,8 @@ class ResourceController extends Controller
             DB::rollBack();
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, $diskDriver->getMessage());
         }
-        DB::commit();
         $resourceFlag->path = $diskConfig->getAccessPath() . '/' . $diskDriver->getPath();
+        DB::commit();
         return api_response_action(true, ErrorCode::$ENUM_SUCCESS, $diskDriver->getMessage(), [
             'url' => $diskDriver->getPath(),
             'data' => $resourceFlag
