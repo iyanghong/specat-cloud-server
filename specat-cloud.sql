@@ -159,7 +159,7 @@ create table if not exists log_user_status(
     user_status char (1) not null default 1 comment '用户状态，0:失效 2:冻结 3:违规',
     created_at datetime null comment '添加时间',
     status_time bigint not null DEFAULT 0 comment '状态持续时间(毫秒)'
-) ENGINE=INNODB charset=utf8mb4 collate=utf8mb4_unicode_ci comment='用户状态日志';
+) ENGINE=INNODB comment='用户状态日志';
 
 
 create table if not exists disk(

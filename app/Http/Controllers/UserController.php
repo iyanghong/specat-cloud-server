@@ -649,13 +649,14 @@ class UserController extends Controller
         $userStatus = $userStatusModel
             ->join('users', 'users.user_uuid', '=', 'log_user_status.user_uuid')
             ->where([$mod => $account])
+            ->orderBy('log_user_status.created_at','desc')
             ->first([
                 'users.user_id',
                 'users.user_uuid',
                 'users.user_name',
                 'users.user_phone',
                 'users.user_email',
-
+                'log_user_status.*',
             ]);
         if ($userStatus === null) {
             $user->user_status = 1;
