@@ -194,7 +194,7 @@ class UserController extends Controller
                     'ip' => request()->ip(),
                     'user_status' => 2,
                     'created_at' => date('Y-m-d H:i:s'),
-                    'status_time' => 0
+                    'status_time' => 3600*24
                 ]);
                 if ($logStatus) {
                     $user->user_status = 2;

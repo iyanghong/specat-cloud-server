@@ -5,6 +5,7 @@ namespace App\Core\Constructors\Model;
 
 
 use App\Core\Enums\SqlTypes;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -524,5 +525,10 @@ class BaseModel extends Model
     public function CreateUser()
     {
         return self::hasOne('\App\Models\User', 'user_id', 'create_user');
+    }
+
+    protected function serializeDate(DateTimeInterface $date)
+    {
+        return $date->format('Y-m-d H:i:s');
     }
 }
