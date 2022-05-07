@@ -250,6 +250,7 @@ class ResourceController extends Controller
             /** @var  $resourceFlag \Illuminate\Database\Query\Builder */
             $repeatNameResource->size = $file->getSize();
             $resourceFlag = $repeatNameResource->save();
+            if($resourceFlag) $resourceFlag = $repeatNameResource;
         } else {
             $data = [
                 'uuid' => getUuid(),
