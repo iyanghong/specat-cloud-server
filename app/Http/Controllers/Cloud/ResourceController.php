@@ -14,9 +14,9 @@ use App\Service\Disk\DiskFactory;
 use App\Service\Disk\Factory\DiskFactoryInterface;
 use App\Service\Progress\ProgressInterface;
 use App\Service\Progress\ResourceProgress;
-use Illuminate\Filesystem\Cache;
 use Illuminate\Http\Request;
 use App\Models\Cloud\Resource;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use JetBrains\PhpStorm\ArrayShape;
 use PhpParser\Builder;
@@ -286,6 +286,181 @@ class ResourceController extends Controller
             'data' => $resourceFlag
         ]);
 
+
+    }
+
+    /**
+     *
+     * @date : 2022/5/11 20:41
+     * @param $resourceUid
+     * @param string $diskUid
+     * @return string
+     * @throws InvalidArgumentException
+     * @author : 孤鸿渺影
+     */
+    public function initMultiUpload($resourceUid, $diskUid = ''): string
+    {
+        $name = \request()->input('name');
+        if (empty($name)) {
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '数据不完整');
+        }
+        $resourceModel = new Resource();
+        $diskModel = new Disk();
+        if ($resourceUid == -1 && !empty($diskUid)) {
+            $disk = $diskModel->findIdOrUuid($diskUid);
+            if (!$disk) {
+                return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '磁盘不存在');
+            }
+
+        } else {
+            $resource = $resourceModel->findIdOrUuid($resourceUid);
+            if (!$resource) {
+                return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '资源不存在');
+            }
+
+            $disk = $diskModel->findIdOrUuid($resource->disk_uuid);
+            if (!$disk) {
+                return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '磁盘不存在');
+            }
+        }
+
+        if (!empty($resource)) {
+            $parentsUid = $resource->parent_all ? rtrim($resource->parent_all, ",") : '';
+        }
+        $parent = [];
+        if (!empty($parentsUid)) {
+            /** @var  $resourceModel \Illuminate\Database\Query\Builder */
+            $parentList = $resourceModel->whereIn('uuid', explode(',', $parentsUid))->get();
+            foreach ($parentList as $item) {
+                $parent[] = $item->name;
+            }
+        }
+        $fileArray = explode('.', $name);
+        $fileName = $fileArray[0];
+        $fileExtension = $fileArray[1];
+
+        !empty($resource) && $parent[] = $resource->name;
+        $parent[] = $fileName . "." . $fileExtension;
+        $path = trim($disk->base_path, '/') . '/' . implode('/', $parent);
+
+        //验证是否当前资源分块上传程序已初始化
+        $cacheUploadId = Cache::get('MultiUpload:Uid:' . onlineMember()->getId() . ':' . md5($path));
+        if ($cacheUploadId) {
+            $cacheData = Cache::get('MultiUpload:Data:' . onlineMember()->getId() . ':' . $cacheUploadId);
+            $cacheData = json_decode($cacheData, true);
+            //已初始化过该资源，直接返回数据
+            if ($cacheData) {
+                $multiBlockUploadSize = systemConfig()->get('Cloud.MultiBlockUploadSize');
+                $multiBlockUploadConcurrent = systemConfig()->get('Cloud.MultiBlockUploadConcurrent');
+                return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '初始化成功', [
+                    'uploadId' => $cacheUploadId,
+                    'partSize' => $multiBlockUploadSize,
+                    'concurrent' => $multiBlockUploadConcurrent,
+                    'data' => $cacheData['data']
+                ]);
+            }
+        }
+        if (empty($resource)) {
+            $repeatNameResource = $resourceModel->where(['parent' => -1, 'disk_uuid' => $diskUid, 'name' => $fileName, 'file_extension' => $fileExtension])->first();
+        } else {
+            $repeatNameResource = $resource->getRepeatNameResource($fileName, $fileExtension);
+        }
+        DB::beginTransaction();
+        if ($repeatNameResource) {
+            $resourceResult = $repeatNameResource;
+        } else {
+            $data = [
+                'uuid' => getUuid(),
+                'disk_uuid' => $disk->uuid,
+                'name' => $fileName,
+                'parent' => empty($resource) ? -1 : $resource->uuid,
+                'status' => -1,
+                'size' => -1,
+                'type' => 'file',
+                'parent_all' => empty($resource) ? '' : ($resource->parent_all . $resource->uuid . ","),
+                'file_type' => DiskFactory::resolveFileType($fileExtension),
+                'file_extension' => $fileExtension,
+                'user_uuid' => onlineMember()->getUuid(),
+                'create_user' => onlineMember()->getUuid()
+            ];
+            $resourceResult = $resourceModel->create($data);
+        }
+
+        if (!$resourceResult) {
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '保存失败');
+        }
+        $diskConfig = new DiskConfig($disk->toArray());
+        $diskDriver = DiskFactory::build($diskConfig);
+        $multiUpload = $diskDriver->initMultiUploadFile($path);
+        if (!$multiUpload) {
+            DB::rollBack();
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '初始化分片失败');
+        }
+        $data = $diskConfig->toArray();
+        $data['resource_uuid'] = $resourceResult->uuid;
+        $data['path'] = $path;
+        $data['data'] = $resourceResult->toArray();
+
+        $uploadId = $multiUpload->getUploadId();
+        Cache::put('MultiUpload:Data:' . onlineMember()->getId() . ':' . $uploadId, json_encode($data));
+        Cache::put('MultiUpload:Uid:' . onlineMember()->getId() . ':' . md5($path), $uploadId);
+        Cache::put('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId, 0);
+        DB::commit();
+        $multiBlockUploadSize = systemConfig()->get('Cloud.MultiBlockUploadSize');
+        $multiBlockUploadConcurrent = systemConfig()->get('Cloud.MultiBlockUploadConcurrent');
+        return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '初始化成功', [
+            'uploadId' => $uploadId,
+            'partSize' => $multiBlockUploadSize,
+            'concurrent' => $multiBlockUploadConcurrent,
+            'data' => $resourceResult
+        ]);
+    }
+
+    /**
+     *
+     * @date : 2022/5/11 20:42
+     * @param $uploadId
+     * @param $current
+     * @param $total
+     * @return string
+     * @throws InvalidArgumentException
+     * @author : 孤鸿渺影
+     */
+    public function multiUploadFile($uploadId, $current, $total): string
+    {
+        $file = request()->file('file', null);
+        if ($file == null) {
+            return api_response_action(false, ErrorCode::$ENUM_PARAM_NULL_ERROR, '请上传文件');
+        }
+        $data = Cache::get('MultiUpload:Data:' . onlineMember()->getId() . ':' . $uploadId);
+        $data = json_decode($data, true);
+        if (empty($data)) {
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '上传进程不存在');
+        }
+        $diskConfig = new DiskConfig($data);
+        $diskDriver = DiskFactory::build($diskConfig);
+        $flag = $diskDriver->multiUploadFile($file, $uploadId, $current, $data);
+        if (!$flag) {
+            return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, $diskDriver->getMultipartUpload()->getMessage() ?? '上传失败');
+        }
+        Cache::increment('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId, $file->getSize());
+        $complete = $diskDriver->getMultipartUpload()->getPartTotal();
+        if ($total == $complete) {
+            $flag = $diskDriver->getMultipartUpload()->merge();
+            $resource = (new Resource())->findIdOrUuid($data['data']['uuid']);
+            $resource->size = Cache::get('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId);
+            $resource->status = 1;
+            $resource->save();
+            Cache::forget('MultiUpload:Data:' . onlineMember()->getId() . ':' . $uploadId);
+            Cache::forget('MultiUpload:Uid:' . onlineMember()->getId() . ':' . md5($data['path']));
+            Cache::forget('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId);
+            if (!$flag) {
+                $resource = (new Resource())->findIdOrUuid($data['data']['uuid']);
+                $resource?->delete();
+                return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, $diskDriver->getMultipartUpload()->getMessage() ?? '合并失败', $diskDriver->getMultipartUpload()->uploadParts);
+            }
+        }
+        return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '上传成功', ['complete' => $complete, 'uploadParts' => $diskDriver->getMultipartUpload()->uploadParts]);
 
     }
 
@@ -884,7 +1059,7 @@ class ResourceController extends Controller
      */
     public function getProgress($key): string
     {
-        $data = \Illuminate\Support\Facades\Cache::get("progress:resource_${key}");
+        $data = Cache::get("progress:resource_${key}");
         return api_response_show(json_decode($data, true));
     }
 }

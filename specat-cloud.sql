@@ -191,6 +191,7 @@ create table if not exists resources(
     parent_all text null  comment '所有父级id',
     disk_uuid char (32) not null comment '所属磁盘',
     name varchar(50) not null comment '资源名',
+    status tinyint not null default 1 comment '状态，-1:上传中,1:正常,0:删除',
     type varchar(20) not null default 'directory' comment '资源类型',
     file_type varchar(20) null comment '文件类型',
     file_extension varchar(20) null comment '文件后缀',

@@ -2,6 +2,7 @@
 
 namespace App\Service\Disk\Factory;
 
+use App\Service\Disk\Library\MultipartUpload;
 use Illuminate\Http\UploadedFile;
 
 interface DiskFactoryInterface
@@ -18,6 +19,22 @@ interface DiskFactoryInterface
      */
     public function upload(UploadedFile $file, string $diyPath = '', array $option = []): bool;
 
+    /**
+     *
+     * @date : 2022/5/9 23:01
+     * @param UploadedFile $file
+     * @param $uploadId
+     * @param $current
+     * @param array $data
+     * @return bool
+     * @author : 孤鸿渺影
+     */
+    public function multiUploadFile(UploadedFile $file,$uploadId, $current, array $data = []): bool;
+
+    /**
+     * @return MultipartUpload
+     */
+    public function getMultipartUpload(): MultipartUpload;
     public function getFileType(): string;
 
     /**

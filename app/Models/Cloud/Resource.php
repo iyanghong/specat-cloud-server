@@ -16,7 +16,7 @@ class Resource extends BaseModel
     const UPDATED_AT = 'updated_at';
     const DELETED_AT = null;
     protected $dateFormat = 'Y-m-d H:i:s';
-    protected $fillable = ["uuid", "parent", "parent_all", "disk_uuid", "name", "type", "file_type", "file_extension", "size", "cover", "user_uuid", "create_user", "update_user"];
+    protected $fillable = ["uuid", "parent", "parent_all", "disk_uuid", "name", "type", "file_type", "status", "file_extension", "size", "cover", "user_uuid", "create_user", "update_user"];
 
     public function child()
     {
@@ -46,7 +46,7 @@ class Resource extends BaseModel
                 $path[] = $parentItem->name;
             }
             if ($isParentDirectory == false) {
-                $path[] .= $this->name .($this->file_extension ? '.' . $this->file_extension : '');
+                $path[] .= $this->name . ($this->file_extension ? '.' . $this->file_extension : '');
             }
             return implode('/', $path);
         }
@@ -169,6 +169,7 @@ class Resource extends BaseModel
         'parent_all' => '所有父级id',
         'disk_uuid' => '所属磁盘',
         'name' => '资源名',
+        'status' => '状态',
         'type' => '资源类型',
         'file_type' => '文件类型',
         'file_extension' => '文件后缀',

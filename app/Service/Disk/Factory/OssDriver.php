@@ -3,7 +3,12 @@
 namespace App\Service\Disk\Factory;
 
 use App\Service\Disk\Config\DiskConfig;
+use App\Service\Disk\Library\MultipartUpload;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Redis;
+use OSS\Core\OssException;
+use OSS\Core\OssUtil;
 use OSS\OssClient;
 
 /**
@@ -16,9 +21,10 @@ class OssDriver implements DiskFactoryInterface
 
     private OssClient $ossClient;
     private DiskConfig $config;
-    private string $message;
+    private string $message = '';
     private string $path;
     private string $type = '';
+    private MultipartUpload $multipartUpload;
 
     public function __construct($config)
     {
@@ -76,6 +82,55 @@ class OssDriver implements DiskFactoryInterface
         }
         return false;
 
+    }
+
+    /**
+     * @throws OssException
+     */
+    public function initMultiUploadFile($path): ?MultipartUpload
+    {
+        if (!$this->initClient()) return null;
+        $this->multipartUpload = new MultipartUpload($this->ossClient, $this->config, $path);
+        return $this->multipartUpload;
+    }
+
+    /**
+     *
+     * @date : 2022/5/9 23:01
+     * @param UploadedFile $file
+     * @param $uploadId
+     * @param $current
+     * @param array $data
+     * @return bool
+     * @throws OssException
+     * @author : 孤鸿渺影
+     */
+    public function multiUploadFile(UploadedFile $file,$uploadId, $current, array $data = []): bool
+    {
+        if (!$this->initClient()) return false;
+        $realPath = $file->getRealPath();
+        $this->path = $data['path'];
+
+        $this->multipartUpload = new MultipartUpload($this->ossClient, $this->config, $this->path,$uploadId);
+        $upload = $this->multipartUpload->upload($realPath, $current);
+        $this->message = $this->multipartUpload->getMessage();
+        return $upload;
+    }
+
+    /**
+     *
+     * @date : 2022/5/10 22:18
+     * @return bool
+     * @author : 孤鸿渺影
+     */
+    public function completeMultipartUpload(): bool
+    {
+        if (!$this->initClient()) return false;
+        if (empty($this->multipartUpload)) {
+            $this->message = '分片上传程序未初始化';
+            return false;
+        }
+        return $this->multipartUpload->merge();
     }
 
     /**
@@ -312,4 +367,22 @@ class OssDriver implements DiskFactoryInterface
         }
         return true;
     }
+
+    /**
+     * @return MultipartUpload
+     */
+    public function getMultipartUpload(): MultipartUpload
+    {
+        return $this->multipartUpload;
+    }
+
+    /**
+     * @param MultipartUpload $multipartUpload
+     */
+    public function setMultipartUpload(MultipartUpload $multipartUpload): void
+    {
+        $this->multipartUpload = $multipartUpload;
+    }
+
+
 }

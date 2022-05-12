@@ -169,8 +169,16 @@ Route::group(['prefix' => 'cloud'], function () {
     Route::post('resource/{currentUid}/to/{targetDisk}/{targetUid}/copy', '\App\Http\Controllers\Cloud\ResourceController@copyResource');
     Route::get('resource/desktop', '\App\Http\Controllers\Cloud\ResourceController@getDesktopResources')->name('cloud.resource.desktop');
     Route::get('resource/{diskUid}/{resourceUid}/list', '\App\Http\Controllers\Cloud\ResourceController@getDiskResourcesByResource')->name('cloud.disk.resource.list');
+
+
+    Route::post('resource/{uuid}/{diskUid}/upload/block', '\App\Http\Controllers\Cloud\ResourceController@initMultiUpload');
+    Route::post('resource/{uuid}/upload/block', '\App\Http\Controllers\Cloud\ResourceController@initMultiUpload');
+    Route::post('resource/{uploadId}/{current}/{total}/part', '\App\Http\Controllers\Cloud\ResourceController@multiUploadFile')->name('cloud.disk.upload.part');
+
+
     Route::post('resource/{uuid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile')->name('cloud.resource.upload');
     Route::post('resource/{uuid}/{diskUid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile')->name('cloud.disk.resource.upload');
+
     Route::get('resource/{resourceUid}/list', '\App\Http\Controllers\Cloud\ResourceController@getResourceList')->name('cloud.resource.all.list');
 
     /** 资源 资源接口集合 : cloud/resource */
