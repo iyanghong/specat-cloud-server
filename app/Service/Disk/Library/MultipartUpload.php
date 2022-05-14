@@ -18,12 +18,11 @@ class MultipartUpload
 {
     private string $uploadId = '';
     private string $cacheKey = '';
-    private OssClient $ossClient;
-    private DiskConfig $config;
-    private string $path;
-    private static int $MULTI_LENGTH = 1024 * 1024 * 4;
-    private string $message = '';
-    private int $index;
+    private OssClient $ossClient;   // oss 客户端
+    private DiskConfig $config;     //磁盘 信息
+    private string $path;           // 路径
+    private static int $MULTI_LENGTH = 1024 * 1024 * 4;//默认分块大小
+    private string $message = '';   //提示信息
 
     public array $uploadParts = array();
 
@@ -44,6 +43,15 @@ class MultipartUpload
     }
 
 
+    /**
+     * 上传分块
+     * @date : 2022/5/14 23:19
+     * @param $file
+     * @param $current
+     * @return bool
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @author : 孤鸿渺影
+     */
     public function upload($file, $current): bool
     {
         if (empty($this->uploadId)) {
@@ -51,14 +59,18 @@ class MultipartUpload
             return false;
         }
         $uploadFileSize = filesize($file);
-        $partSize = systemConfig()->get('Cloud.MultiBlockUploadSize');
-        if($partSize){
+        $partSize = systemConfig()->get('Cloud.MultiBlockUploadSize');//获取分块大小
+
+        if ($partSize) {
             $partSize = $partSize * 1024 * 1024;
-        }else{
+        } else {
             $partSize = self::$MULTI_LENGTH;
         }
+        //切割分块
         $pieces = $this->ossClient->generateMultiuploadParts($uploadFileSize, $partSize);
+
         $uploadPosition = 0;
+
         $isCheckMd5 = true;
         foreach ($pieces as $i => $piece) {
             $fromPos = $uploadPosition + (integer)$piece[$this->ossClient::OSS_SEEK_TO];
@@ -81,10 +93,11 @@ class MultipartUpload
                 $upOptions[$this->ossClient::OSS_CONTENT_MD5] = $contentMd5;
             }
             try {
+                // 上传分片。
                 $item = $this->ossClient->uploadPart($this->config->getBucket(), $this->path, $this->uploadId, $upOptions);
                 //把分片存入有序集合
                 Redis::zadd($this->cacheKey . ":uploadPart", $current, $item);
-                // 上传分片。
+
             } catch (OssException $e) {
                 $this->message = $e->getMessage() ? ($e->getMessage() . "initiateMultipartUpload, uploadPart - part#{$i} FAILED\n") : '未知错误';
                 return false;
@@ -94,7 +107,7 @@ class MultipartUpload
     }
 
     /**
-     *
+     * 合并分块
      * @date : 2022/5/10 22:13
      * @return bool
      * @author : 孤鸿渺影
@@ -106,9 +119,12 @@ class MultipartUpload
             return false;
         }
 
+        //从有序集合中获取分块列表，并按照权值排序
         $uploadPartCacheList = Redis::zrange($this->cacheKey . ":uploadPart", 0, -1);
         Redis::zremrangebyrank($this->cacheKey . ":uploadPart", 0, -1);
+
         $uploadParts = array();
+        //构建分块信息
         foreach ($uploadPartCacheList as $i => $eTag) {
             $uploadParts[] = array(
                 'PartNumber' => ($i + 1),
@@ -161,21 +177,6 @@ class MultipartUpload
         $this->uploadId = $uploadId;
     }
 
-    /**
-     * @return string
-     */
-    public function getCacheKey(): string
-    {
-        return $this->cacheKey;
-    }
-
-    /**
-     * @param string $cacheKey
-     */
-    public function setCacheKey(string $cacheKey): void
-    {
-        $this->cacheKey = $cacheKey;
-    }
 
     /**
      * @return string

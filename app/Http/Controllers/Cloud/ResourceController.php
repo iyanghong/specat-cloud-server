@@ -389,6 +389,7 @@ class ResourceController extends Controller
         if (!$resourceResult) {
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '保存失败');
         }
+
         $diskConfig = new DiskConfig($disk->toArray());
         $diskDriver = DiskFactory::build($diskConfig);
         $multiUpload = $diskDriver->initMultiUploadFile($path);
@@ -406,8 +407,8 @@ class ResourceController extends Controller
         Cache::put('MultiUpload:Uid:' . onlineMember()->getId() . ':' . md5($path), $uploadId);
         Cache::put('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId, 0);
         DB::commit();
-        $multiBlockUploadSize = systemConfig()->get('Cloud.MultiBlockUploadSize');
-        $multiBlockUploadConcurrent = systemConfig()->get('Cloud.MultiBlockUploadConcurrent');
+        $multiBlockUploadSize = systemConfig()->get('Cloud.MultiBlockUploadSize');//分块大小
+        $multiBlockUploadConcurrent = systemConfig()->get('Cloud.MultiBlockUploadConcurrent');  //并发数
         return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '初始化成功', [
             'uploadId' => $uploadId,
             'partSize' => $multiBlockUploadSize,
@@ -432,25 +433,34 @@ class ResourceController extends Controller
         if ($file == null) {
             return api_response_action(false, ErrorCode::$ENUM_PARAM_NULL_ERROR, '请上传文件');
         }
+        //检验是否已初始化上传进程
         $data = Cache::get('MultiUpload:Data:' . onlineMember()->getId() . ':' . $uploadId);
         $data = json_decode($data, true);
         if (empty($data)) {
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '上传进程不存在');
         }
+        //初始化磁盘信息
         $diskConfig = new DiskConfig($data);
+        //构建磁盘
         $diskDriver = DiskFactory::build($diskConfig);
         $flag = $diskDriver->multiUploadFile($file, $uploadId, $current, $data);
         if (!$flag) {
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, $diskDriver->getMultipartUpload()->getMessage() ?? '上传失败');
         }
+        //上传分块成功递增文件大小
         Cache::increment('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId, $file->getSize());
+        //判断已完成的分块和总分块数量对比，是否是最后一个分块
         $complete = $diskDriver->getMultipartUpload()->getPartTotal();
         if ($total == $complete) {
+            //合并分块
             $flag = $diskDriver->getMultipartUpload()->merge();
             $resource = (new Resource())->findIdOrUuid($data['data']['uuid']);
+            //写入文件大小
             $resource->size = Cache::get('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId);
+            //修改文件状态
             $resource->status = 1;
             $resource->save();
+            //删除缓存信息
             Cache::forget('MultiUpload:Data:' . onlineMember()->getId() . ':' . $uploadId);
             Cache::forget('MultiUpload:Uid:' . onlineMember()->getId() . ':' . md5($data['path']));
             Cache::forget('MultiUpload:Size:' . onlineMember()->getId() . ':' . $uploadId);
@@ -460,8 +470,7 @@ class ResourceController extends Controller
                 return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, $diskDriver->getMultipartUpload()->getMessage() ?? '合并失败', $diskDriver->getMultipartUpload()->uploadParts);
             }
         }
-        return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '上传成功', ['complete' => $complete, 'uploadParts' => $diskDriver->getMultipartUpload()->uploadParts]);
-
+        return api_response_action(true, ErrorCode::$ENUM_SUCCESS, '上传成功', ['complete' => $complete]);
     }
 
     /**
