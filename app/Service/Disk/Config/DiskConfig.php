@@ -53,7 +53,10 @@ class DiskConfig
             $this->default = $data['is_default'];
             if ($this->default) {
                 $this->setDefaultDisk();
-                !empty($data['base_path']) && $this->basePath = $data['base_path'];
+                if(!empty($data['base_path'])){
+                    $basePath = trim(systemConfig()->get('Cloud.defaultDiskBasePath'),'/') . "/" . trim($data['base_path'],'/');
+                    $this->basePath = $basePath;
+                }
             } else {
                 $this->vendor = $data['vendor'];
                 $this->accessKeyId = maskCrypt()->decrypt($data['access_key_id']);
@@ -79,7 +82,7 @@ class DiskConfig
         $this->accessKeyId = systemConfig()->get('Cloud.defaultDiskAccessKeyId');
         $this->accessKeySecret = systemConfig()->get('Cloud.defaultDiskAccessKeySecret');
         $this->node = systemConfig()->get('Cloud.defaultDiskNode');
-        $this->basePath = systemConfig()->get('Cloud.defaultDiskBasePath');
+        $this->basePath = trim(systemConfig()->get('Cloud.defaultDiskBasePath'),'/');
         $this->default = 1;
         $this->bucket = systemConfig()->get('Cloud.defaultDiskBucket');
         $this->accessPath = systemConfig()->get('Cloud.defaultDiskAccessPath');

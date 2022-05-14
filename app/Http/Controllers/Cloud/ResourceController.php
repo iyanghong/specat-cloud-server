@@ -89,10 +89,11 @@ class ResourceController extends Controller
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '磁盘不存在');
         }
         $resourceModel = new Resource();
+        $diskConfig = new DiskConfig($disk);
         //解析根访问路径
-        $accessPath = $disk->access_path == -1 ? systemConfig()->get('Cloud.defaultDiskAccessPath') : $disk->access_path;
-        $accessPath = rtrim($accessPath, '/') . '/' . trim($disk->base_path, '/');
-        $accessPath = rtrim($accessPath, '/');
+        $accessPath = $diskConfig->getAccessPath();
+        $accessPath = trim($accessPath, '/') . '/' . trim($diskConfig->getBasePath(), '/');
+        $accessPath = trim($accessPath, '/');
         $location = [];
         //若不为磁盘根目录
         if ($resourceUid != -1) {
@@ -105,7 +106,7 @@ class ResourceController extends Controller
                 return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '资源不存在');
             }
             $location = $currentResource->getLocation();
-            $accessPath = $accessPath . '/' . $currentResource->getResourcePath();
+//            $accessPath = $accessPath . '/' . $currentResource->getResourcePath('',true);
         }
 
         array_unshift($location, [
@@ -117,12 +118,17 @@ class ResourceController extends Controller
         $resources = $resourceModel->where([
             'disk_uuid' => $disk->uuid,
             'parent' => $resourceUid
-        ])->get(['id', 'uuid', 'parent', 'disk_uuid', 'name', 'type', 'file_type', 'file_extension', 'size', 'cover', 'user_uuid', 'created_at']);
+        ])->get(['id', 'uuid', 'parent','parent_all', 'disk_uuid', 'name', 'type', 'file_type', 'file_extension', 'size', 'cover', 'user_uuid', 'created_at']);
 
 
         foreach ($resources as $resource) {
             if ($resource->type === 'file') {
-                $resource['path'] = $accessPath . '/' . $resource->getResourcePath() . $resource->name . '.' . $resource->file_extension;
+                if($resource->parent == -1 && empty($resource->parent_all)){
+                    $resource['path'] = trim($accessPath, '/') . '/' . $resource->name . '.' . $resource->file_extension;
+                }else {
+                    $resource['path'] = trim($accessPath, '/') . '/' . trim($resource->getResourcePath(), '/');
+                }
+
             }
         }
         $resource = empty($currentResource) ? ['disk_uuid' => $disk->uuid] : $currentResource;
@@ -159,8 +165,9 @@ class ResourceController extends Controller
         if (!$desktop) {
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '桌面资源不存在');
         }
-        $accessPath = $disk->access_path == -1 ? systemConfig()->get('Cloud.defaultDiskAccessPath') : $disk->access_path;
-        $accessPath = rtrim($accessPath, '/') . '/' . trim($disk->base_path, '/');
+        $diskConfig = new DiskConfig($disk);
+        $accessPath = $diskConfig->getAccessPath();
+        $accessPath = rtrim($accessPath, '/') . '/' . trim($diskConfig->getBasePath(), '/');
         $list = $this->getResourceListUitl($desktop->uuid, $accessPath);
         $desktop->list = $list;
         $desktop->personal_setting = $this->getPersonalTheme();
@@ -230,14 +237,14 @@ class ResourceController extends Controller
                 $parent[] = $item->name;
             }
         }
+        $diskConfig = new DiskConfig($disk->toArray());
         $fileName = \request('name', $file->getFilename());
         $fileName = explode('.', $fileName)[0];
         $fileExtension = $file->getClientOriginalExtension();
 
         !empty($resource) && $parent[] = $resource->name;
         $parent[] = $fileName . "." . $fileExtension;
-        $path = trim($disk->base_path, '/') . '/' . implode('/', $parent);
-
+        $path = trim($diskConfig->getBasePath(), '/') . '/' . implode('/', $parent);
         DB::beginTransaction();
         $resourceFlag = false;
 
@@ -272,7 +279,7 @@ class ResourceController extends Controller
             DB::rollBack();
             return api_response_action(false, ErrorCode::$ENUM_ACTION_ERROR, '上传失败');
         }
-        $diskConfig = new DiskConfig($disk->toArray());
+
         $diskDriver = DiskFactory::build($diskConfig);
         $flag = $diskDriver->upload($file, $path);
         if ($flag == false) {

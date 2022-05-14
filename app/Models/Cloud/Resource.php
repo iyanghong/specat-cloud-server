@@ -36,9 +36,10 @@ class Resource extends BaseModel
      */
     public function getResourcePath($parentAll = '', $isParentDirectory = false)
     {
-
         if (empty($parentAll)) $parentAll = $this->parent_all;
+
         if (!empty($parentAll)) {
+
             $path = [];
             $parentsUid = rtrim($parentAll, ",");
             $parentList = (new self())->whereIn('uuid', explode(',', $parentsUid))->orderBy('id', 'asc')->get();
@@ -48,6 +49,7 @@ class Resource extends BaseModel
             if ($isParentDirectory == false) {
                 $path[] .= $this->name . ($this->file_extension ? '.' . $this->file_extension : '');
             }
+
             return implode('/', $path);
         }
         return '';
