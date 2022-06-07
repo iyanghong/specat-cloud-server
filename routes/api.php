@@ -177,8 +177,8 @@ Route::group(['prefix' => 'cloud'], function () {
 
 
     Route::post('resource/{uuid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile')->name('cloud.resource.upload');
+    Route::post('resource/share/{uuid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile');
     Route::post('resource/{uuid}/{diskUid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile')->name('cloud.disk.resource.upload');
-    Route::post('resource/share/{uuid}/{diskUid}/upload', '\App\Http\Controllers\Cloud\ResourceController@uploadFile');
 
 
 
