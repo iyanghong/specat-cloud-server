@@ -118,14 +118,14 @@ class ResourceController extends Controller
         $resources = $resourceModel->where([
             'disk_uuid' => $disk->uuid,
             'parent' => $resourceUid
-        ])->get(['id', 'uuid', 'parent','parent_all', 'disk_uuid', 'name', 'type', 'file_type', 'file_extension', 'size', 'cover', 'user_uuid', 'created_at']);
+        ])->get(['id', 'uuid', 'parent', 'parent_all', 'disk_uuid', 'name', 'type', 'file_type', 'file_extension', 'size', 'cover', 'user_uuid', 'created_at']);
 
 
         foreach ($resources as $resource) {
             if ($resource->type === 'file') {
-                if($resource->parent == -1 && empty($resource->parent_all)){
+                if ($resource->parent == -1 && empty($resource->parent_all)) {
                     $resource['path'] = trim($accessPath, '/') . '/' . $resource->name . '.' . $resource->file_extension;
-                }else {
+                } else {
                     $resource['path'] = trim($accessPath, '/') . '/' . trim($resource->getResourcePath(), '/');
                 }
 
@@ -238,8 +238,12 @@ class ResourceController extends Controller
             }
         }
         $diskConfig = new DiskConfig($disk->toArray());
-        $fileName = \request('name', $file->getFilename());
-        $fileName = explode('.', $fileName)[0];
+        if (\request()->exists('fileRandom') && \request()->input('fileRandom')) {
+            $fileName = getUuid() . '.' . $file->getClientOriginalExtension();
+        } else {
+            $fileName = \request('name', $file->getFilename());
+            $fileName = explode('.', $fileName)[0];
+        }
         $fileExtension = $file->getClientOriginalExtension();
 
         !empty($resource) && $parent[] = $resource->name;
